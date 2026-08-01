@@ -614,7 +614,7 @@
     // EMA Smoothing
     const smoothed = [];
     let ema = history[0].val;
-    const alpha = 0.8; // High sensitivity to micro-variations
+    const alpha = 0.6; // Sensitivity value to micro-variations
     for (let i = 0; i < history.length; i++) {
       ema = alpha * history[i].val + (1 - alpha) * ema;
       smoothed.push({ t: history[i].t, val: ema });
