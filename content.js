@@ -604,7 +604,7 @@
     const rect = canvas.getBoundingClientRect();
     if (rect.width === 0) return; // not visible
     canvas.width = rect.width;
-    canvas.height = 70; // fixed
+    canvas.height = 85; // fixed
 
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -629,9 +629,9 @@
     if (minVal > 0) minVal = 0; 
     if (maxVal === minVal) maxVal = minVal + 1;
     
-    // add 10% headroom to max
+    // add 25% headroom to max to leave space for text
     const range = maxVal - minVal;
-    maxVal += range * 0.1;
+    maxVal += range * 0.25;
 
     const getX = (t) => ((t - minTime) / (maxTime - minTime)) * canvas.width;
     const getY = (v) => canvas.height - ((v - minVal) / (maxVal - minVal)) * canvas.height;
@@ -668,7 +668,8 @@
     
     ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
     ctx.textAlign = 'right';
-    ctx.fillText(`Máx: ${formatCompact(maxVal - (range * 0.1))}/h`, canvas.width - 2, 10);
+    // Use true max for the text, not the padded maxVal
+    ctx.fillText(`Máx: ${formatCompact(maxVal - (range * 0.25))}/h`, canvas.width - 2, 10);
   }
 
   function render() {
