@@ -128,7 +128,7 @@
 
     const totalGain = relevant.reduce((acc, s) => acc + s.delta, 0);
     const firstT = relevant[0].t;
-    const elapsedMs = Math.max(now - firstT, 1000);
+    const elapsedMs = Math.max(now - firstT, 60000); // 60s warm-up to prevent initial spikes
     const elapsedHours = elapsedMs / 3600000;
     return { goldh: totalGain / elapsedHours, elapsedSec: elapsedMs / 1000 };
   }
@@ -162,7 +162,7 @@
 
     const totalGain = relevant.reduce((acc, s) => acc + s.delta, 0);
     const firstT = relevant[0].t;
-    const elapsedMs = Math.max(now - firstT, 1000); // mínimo 1s pra evitar divisão absurda
+    const elapsedMs = Math.max(now - firstT, 60000); // 60s warm-up to prevent initial spikes
     const elapsedHours = elapsedMs / 3600000;
     return { xph: totalGain / elapsedHours, elapsedSec: elapsedMs / 1000 };
   }
@@ -614,7 +614,7 @@
     // EMA Smoothing
     const smoothed = [];
     let ema = history[0].val;
-    const alpha = 0.2; 
+    const alpha = 0.8; // High sensitivity to micro-variations
     for (let i = 0; i < history.length; i++) {
       ema = alpha * history[i].val + (1 - alpha) * ema;
       smoothed.push({ t: history[i].t, val: ema });
@@ -624,14 +624,20 @@
     const maxTime = now;
     const minTime = now - 60 * 60 * 1000;
 
-    let minVal = Math.min(...smoothed.map(h => h.val));
-    let maxVal = Math.max(...smoothed.map(h => h.val));
-    if (minVal > 0) minVal = 0; 
-    if (maxVal === minVal) maxVal = minVal + 1;
+    const rawMin = Math.min(...smoothed.map(h => h.val));
+    const rawMax = Math.max(...smoothed.map(h => h.val));
     
-    // add 25% headroom to max to leave space for text
-    const range = maxVal - minVal;
-    maxVal += range * 0.25;
+    let range = rawMax - rawMin;
+    if (range === 0) range = 1;
+    
+    // Dynamic scale highlighting micro-variations
+    let maxVal = rawMax + range * 0.35; // 35% headroom for text
+    let minVal = rawMin - range * 0.10; // 10% bottom padding
+    
+    // Prevent minVal from dropping below 0 if raw data was purely positive
+    if (rawMin >= 0 && minVal < 0) {
+       minVal = 0;
+    }
 
     const getX = (t) => ((t - minTime) / (maxTime - minTime)) * canvas.width;
     const getY = (v) => canvas.height - ((v - minVal) / (maxVal - minVal)) * canvas.height;
@@ -668,23 +674,23 @@
     
     ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
     ctx.textAlign = 'right';
-    // Use true max for the text, not the padded maxVal
-    ctx.fillText(`Máx: ${formatCompact(maxVal - (range * 0.25))}/h`, canvas.width - 2, 10);
+    // Use true max for the text
+    ctx.fillText(`Máx: ${formatCompact(rawMax)}/h`, canvas.width - 2, 10);
   }
 
   function render() {
 
     if (!overlayEl) return;
-    const winDef = WINDOWS.find((w) => w.key === selectedWindow) || WINDOWS[0];
-    const { xph, elapsedSec } = computeXpH(winDef.ms);
+    
+    // Fast reactivity: use a 3-minute rolling window for the instantaneous rate calculation
+    const REACTIVE_WINDOW_MS = 3 * 60 * 1000;
+    
+    const { xph, elapsedSec } = computeXpH(REACTIVE_WINDOW_MS);
     lastRealXph = xph;
 
     overlayEl.querySelector('#bxph-real-xph').textContent = formatNumber(xph);
     
-
-    
-
-    const { goldh } = computeGoldH(winDef.ms);
+    const { goldh } = computeGoldH(REACTIVE_WINDOW_MS);
     const goldEl = overlayEl.querySelector('#bxph-gold-h');
     if (goldFound) {
       goldEl.textContent = formatSignedNumber(goldh);
