@@ -14,7 +14,7 @@
   box-shadow: 0 4px 14px rgba(0,0,0,0.4);
   user-select: none;
   cursor: default;
-  resize: both;
+  resize: horizontal;
   overflow: hidden;
 }
 
@@ -92,19 +92,25 @@
   color: #ff6b6b;
 }
 
+#bxph-gold-h,
+#bxph-gold-h.bxph-positive {
+  color: #ffd76a;
+}
+
 .bxph-windows {
   display: flex;
+  flex-direction: column;
   gap: 4px;
   margin-top: 8px;
-  flex-wrap: wrap;
 }
 
 .bxph-win-btn {
+  width: 100%;
   background: #2a2a30;
   border: 1px solid #444;
   color: #ccc;
   border-radius: 5px;
-  padding: 3px 7px;
+  padding: 4px 0;
   font-size: 11px;
   cursor: pointer;
 }

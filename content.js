@@ -184,6 +184,15 @@
     return `${m}m${s > 0 ? s + 's' : ''}`;
   }
 
+  function formatCompact(n) {
+    if (isNaN(n) || n === 0) return '0';
+    const absN = Math.abs(n);
+    const sign = n < 0 ? '-' : '';
+    if (absN >= 1e6) return sign + (absN / 1e6).toFixed(1).replace('.0', '') + 'M';
+    if (absN >= 1e3) return sign + (absN / 1e3).toFixed(1).replace('.0', '') + 'k';
+    return sign + Math.round(absN).toString();
+  }
+
   function formatDuration(hours) {
     if (!isFinite(hours) || hours <= 0) return '—';
     const totalMinutes = hours * 60;
@@ -319,7 +328,7 @@
         </div>
         <canvas id="bxph-canvas-gold" class="bxph-canvas"></canvas>
         <div class="bxph-windows" id="bxph-windows"></div>
-        <button id="bxph-reset-btn" class="bxph-reset-btn">Resetar</button>
+        <button id="bxph-reset-btn" class="bxph-reset-btn">Reiniciar</button>
         <div id="bxph-status"></div>
       </div>
     `;
@@ -650,6 +659,16 @@
     grad.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
     ctx.fillStyle = grad;
     ctx.fill();
+
+    // Draw text overlays
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+    ctx.font = '9px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText("-1h", 2, canvas.height - 2);
+    
+    ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+    ctx.textAlign = 'right';
+    ctx.fillText(`Máx: ${formatCompact(maxVal - (range * 0.1))}/h`, canvas.width - 2, 10);
   }
 
   function render() {
