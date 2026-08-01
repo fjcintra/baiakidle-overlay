@@ -631,13 +631,8 @@
     if (range === 0) range = 1;
     
     // Dynamic scale highlighting micro-variations
-    let maxVal = rawMax + range * 0.35; // 35% headroom for text
-    let minVal = rawMin - range * 0.10; // 10% bottom padding
-    
-    // Prevent minVal from dropping below 0 if raw data was purely positive
-    if (rawMin >= 0 && minVal < 0) {
-       minVal = 0;
-    }
+    let maxVal = rawMax + range * 0.35; // 35% top padding for max text
+    let minVal = rawMin - range * 0.35; // 35% bottom padding for min text
 
     const getX = (t) => ((t - minTime) / (maxTime - minTime)) * canvas.width;
     const getY = (v) => canvas.height - ((v - minVal) / (maxVal - minVal)) * canvas.height;
@@ -676,6 +671,8 @@
     ctx.textAlign = 'right';
     // Use true max for the text
     ctx.fillText(`Máx: ${formatCompact(rawMax)}/h`, canvas.width - 2, 10);
+    // Use true min for the text
+    ctx.fillText(`Mín: ${formatCompact(rawMin)}/h`, canvas.width - 2, canvas.height - 2);
   }
 
   function render() {
