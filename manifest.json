@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Baiak Idle - XP/h Real",
+  "version": "1.0.0",
+  "description": "Calcula um XP/h mais preciso no Baiak Idle, lendo o XP Gain em tempo real com janela deslizante.",
+  "permissions": ["storage"],
+  "content_scripts": [
+    {
+      "matches": ["https://baiakidle.com/jogar/*"],
+      "js": ["content.js"],
+      "css": ["overlay.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Baiak Idle - XP/h Real"
+  }
+}
