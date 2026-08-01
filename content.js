@@ -3,19 +3,16 @@
 
   // ---------- Config ----------
   const TICK_MS = 1000;
-  const MAX_HISTORY_MS = 3 * 60 * 60 * 1000; // guarda até 3h de amostras (para o modo "Sessão")
+  const MAX_HISTORY_MS = 60 * 60 * 1000; // guarda até 3h de amostras (para o modo "Sessão")
   const WINDOWS = [
-    { key: '1m', label: '1min', ms: 60 * 1000 },
-    { key: '5m', label: '5min', ms: 5 * 60 * 1000 },
-    { key: '15m', label: '15min', ms: 15 * 60 * 1000 },
-    { key: 'session', label: 'Sessão', ms: Infinity },
+    { key: '1h', label: '1h', ms: 60 * 60 * 1000 },
   ];
   const LABEL_REGEX = /^xp\s*gain$/i;
 
   // ---------- Estado ----------
   let samples = []; // { t: timestamp, delta: number }
   let lastValue = null;
-  let selectedWindow = '5m';
+  let selectedWindow = '1h';
   let collapsed = false;
   let overlayFound = false;
   let lastRealXph = 0;
@@ -24,6 +21,11 @@
   let goldSamples = []; // { t: timestamp, delta: number } (delta pode ser negativo)
   let lastGoldValue = null;
   let goldFound = false;
+
+  // Canvas history
+  let xphHistory = [];
+  let goldhHistory = [];
+  let lastGraphUpdate = 0;
 
   // ---------- Utils ----------
   function parseBRNumber(text) {
@@ -297,36 +299,31 @@
   function buildOverlay() {
     overlayEl = document.createElement('div');
     overlayEl.id = 'bxph-overlay';
+    
     overlayEl.innerHTML = `
       <div id="bxph-header">
-        <span>XP/h Real</span>
+        <span>Performance</span>
         <span class="bxph-header-icons">
-          <span class="bxph-dock-toggle" title="Colar painéis">🔗</span>
           <span class="bxph-toggle" title="Minimizar/expandir">▾</span>
         </span>
       </div>
       <div class="bxph-body">
         <div class="bxph-row">
-          <span class="bxph-label">XP/h (jogo)</span>
-          <span class="bxph-value bxph-dim" id="bxph-game-xph">–</span>
-        </div>
-        <div class="bxph-row">
-          <span class="bxph-label">XP/h (real)</span>
+          <span class="bxph-label">XP/h</span>
           <span class="bxph-value" id="bxph-real-xph">–</span>
         </div>
-        <div class="bxph-row">
-          <span class="bxph-label">Amostra</span>
-          <span class="bxph-value bxph-dim" id="bxph-elapsed">–</span>
-        </div>
+        <canvas id="bxph-canvas-xp" class="bxph-canvas"></canvas>
         <div class="bxph-row">
           <span class="bxph-label">Gold/h</span>
           <span class="bxph-value" id="bxph-gold-h">–</span>
         </div>
+        <canvas id="bxph-canvas-gold" class="bxph-canvas"></canvas>
         <div class="bxph-windows" id="bxph-windows"></div>
         <button id="bxph-reset-btn" class="bxph-reset-btn">Resetar</button>
         <div id="bxph-status"></div>
       </div>
     `;
+
     document.body.appendChild(overlayEl);
 
     bodyEl = overlayEl.querySelector('.bxph-body');
@@ -348,6 +345,8 @@
     });
 
     overlayEl.querySelector('#bxph-reset-btn').addEventListener('click', () => {
+      xphHistory = [];
+      goldhHistory = [];
       samples = [];
       lastValue = null;
       goldSamples = [];
@@ -355,9 +354,7 @@
       render();
     });
 
-    overlayEl.querySelector('.bxph-dock-toggle').addEventListener('click', () => {
-      setDocked(!docked);
-    });
+    
 
     overlayEl.querySelector('.bxph-toggle').addEventListener('click', () => {
       collapsed = !collapsed;
@@ -465,7 +462,7 @@
         <div class="bxph-hint">Baseado no XP/h real (<span id="bxph-level-window-label"></span>)</div>
       </div>
     `;
-    document.body.appendChild(levelOverlayEl);
+    // document.body.appendChild(levelOverlayEl);
 
     levelListEl = levelOverlayEl.querySelector('#bxph-level-list');
     const mainSelectEl = levelOverlayEl.querySelector('#bxph-main-select');
@@ -474,6 +471,8 @@
       mainIndex = parseInt(mainSelectEl.value, 10) || 0;
       chrome.storage.local.set({ bxph_main_index: mainIndex });
       renderLevelOverlay();
+
+
     });
 
     levelOverlayEl.querySelector('.bxph-dock-toggle').addEventListener('click', () => {
@@ -504,14 +503,16 @@
           levelOverlayEl.style.right = '230px';
         }
         if (typeof res.bxph_main_index === 'number') mainIndex = res.bxph_main_index;
-        renderLevelOverlay();
+      renderLevelOverlay();
+
+
       }
     );
   }
 
   function renderLevelOverlay() {
     if (!levelOverlayEl) return;
-    const winDef = WINDOWS.find((w) => w.key === selectedWindow) || WINDOWS[1];
+    const winDef = WINDOWS.find((w) => w.key === selectedWindow) || WINDOWS[0];
     levelOverlayEl.querySelector('#bxph-level-window-label').textContent = winDef.label;
 
     const members = findPartyMembers();
@@ -586,18 +587,82 @@
     return null;
   }
 
+  
+  function drawGraph(canvasId, history, r, g, b) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width === 0) return; // not visible
+    canvas.width = rect.width;
+    canvas.height = 70; // fixed
+
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    if (history.length < 2) return;
+
+    // EMA Smoothing
+    const smoothed = [];
+    let ema = history[0].val;
+    const alpha = 0.2; 
+    for (let i = 0; i < history.length; i++) {
+      ema = alpha * history[i].val + (1 - alpha) * ema;
+      smoothed.push({ t: history[i].t, val: ema });
+    }
+
+    const now = Date.now();
+    const maxTime = now;
+    const minTime = now - 60 * 60 * 1000;
+
+    let minVal = Math.min(...smoothed.map(h => h.val));
+    let maxVal = Math.max(...smoothed.map(h => h.val));
+    if (minVal > 0) minVal = 0; 
+    if (maxVal === minVal) maxVal = minVal + 1;
+    
+    // add 10% headroom to max
+    const range = maxVal - minVal;
+    maxVal += range * 0.1;
+
+    const getX = (t) => ((t - minTime) / (maxTime - minTime)) * canvas.width;
+    const getY = (v) => canvas.height - ((v - minVal) / (maxVal - minVal)) * canvas.height;
+
+    ctx.beginPath();
+    ctx.strokeStyle = `rgb(${r}, ${g}, ${b})`;
+    ctx.lineWidth = 2;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+
+    for (let i = 0; i < smoothed.length; i++) {
+      const x = getX(smoothed[i].t);
+      const y = getY(smoothed[i].val);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    
+    ctx.lineTo(getX(smoothed[smoothed.length - 1].t), canvas.height);
+    ctx.lineTo(getX(smoothed[0].t), canvas.height);
+    ctx.closePath();
+    
+    const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    grad.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0.4)`);
+    grad.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+    ctx.fillStyle = grad;
+    ctx.fill();
+  }
+
   function render() {
+
     if (!overlayEl) return;
-    const winDef = WINDOWS.find((w) => w.key === selectedWindow) || WINDOWS[1];
+    const winDef = WINDOWS.find((w) => w.key === selectedWindow) || WINDOWS[0];
     const { xph, elapsedSec } = computeXpH(winDef.ms);
     lastRealXph = xph;
 
     overlayEl.querySelector('#bxph-real-xph').textContent = formatNumber(xph);
-    overlayEl.querySelector('#bxph-elapsed').textContent = formatElapsed(elapsedSec);
+    
 
-    const gameXph = findGameXphValue();
-    overlayEl.querySelector('#bxph-game-xph').textContent =
-      gameXph !== null ? formatNumber(gameXph) : '–';
+    
 
     const { goldh } = computeGoldH(winDef.ms);
     const goldEl = overlayEl.querySelector('#bxph-gold-h');
@@ -618,12 +683,35 @@
       statusEl.textContent = '';
     }
 
-    renderLevelOverlay();
+    const now = Date.now();
+    if (now - lastGraphUpdate >= 5000) {
+      xphHistory.push({ t: now, val: xph });
+      goldhHistory.push({ t: now, val: goldh });
+      
+      const cutoff = now - 60 * 60 * 1000;
+      xphHistory = xphHistory.filter(h => h.t >= cutoff);
+      goldhHistory = goldhHistory.filter(h => h.t >= cutoff);
+
+      lastGraphUpdate = now;
+    }
+    
+    try {
+      drawGraph('bxph-canvas-xp', xphHistory, 107, 255, 176); // #6bffb0
+      drawGraph('bxph-canvas-gold', goldhHistory, 255, 215, 106); // #ffd76a
+    } catch (e) {
+      console.error('Error drawing canvas', e);
+    }
+
+      renderLevelOverlay();
+
+
   }
 
   // Permite que o popup peça um reset dos dados coletados
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === 'local' && changes.bxph_reset_request) {
+      xphHistory = [];
+      goldhHistory = [];
       samples = [];
       lastValue = null;
       goldSamples = [];
@@ -661,6 +749,13 @@
       updateDockUI();
     });
     setInterval(tick, TICK_MS);
+    const ro = new ResizeObserver(() => {
+      try {
+        drawGraph('bxph-canvas-xp', xphHistory, 107, 255, 176);
+        drawGraph('bxph-canvas-gold', goldhHistory, 255, 215, 106);
+      } catch(e) {}
+    });
+    if (overlayEl) ro.observe(overlayEl);
     tick();
   }
 
