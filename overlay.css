@@ -99,13 +99,13 @@
 
 .bxph-windows {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   gap: 4px;
   margin-top: 8px;
 }
 
 .bxph-win-btn {
-  width: 100%;
+  flex: 1;
   background: #2a2a30;
   border: 1px solid #444;
   color: #ccc;

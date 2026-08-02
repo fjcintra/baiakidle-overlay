@@ -5,6 +5,8 @@
   const TICK_MS = 1000;
   const MAX_HISTORY_MS = 60 * 60 * 1000; // guarda até 3h de amostras (para o modo "Sessão")
   const WINDOWS = [
+    { key: '15m', label: '15m', ms: 15 * 60 * 1000 },
+    { key: '30m', label: '30m', ms: 30 * 60 * 1000 },
     { key: '1h', label: '1h', ms: 60 * 60 * 1000 },
   ];
   const LABEL_REGEX = /^xp\s*gain$/i;
@@ -521,7 +523,7 @@
 
   function renderLevelOverlay() {
     if (!levelOverlayEl) return;
-    const winDef = WINDOWS.find((w) => w.key === selectedWindow) || WINDOWS[0];
+    const winDef = WINDOWS.find((w) => w.key === selectedWindow) || WINDOWS[2];
     levelOverlayEl.querySelector('#bxph-level-window-label').textContent = winDef.label;
 
     const members = findPartyMembers();
@@ -597,7 +599,7 @@
   }
 
   
-  function drawGraph(canvasId, history, r, g, b) {
+  function drawGraph(canvasId, history, r, g, b, winDef) {
     const canvas = document.getElementById(canvasId);
     if (!canvas) return;
     
@@ -611,7 +613,7 @@
 
     if (history.length < 2) return;
 
-    // EMA Smoothing
+    // EMA Smoothing over the full history up to 1h
     const smoothed = [];
     let ema = history[0].val;
     const alpha = 0.6; // Sensitivity value to micro-variations
@@ -622,10 +624,14 @@
 
     const now = Date.now();
     const maxTime = now;
-    const minTime = now - 60 * 60 * 1000;
+    const minTime = now - winDef.ms;
 
-    const rawMin = Math.min(...smoothed.map(h => h.val));
-    const rawMax = Math.max(...smoothed.map(h => h.val));
+    // Filter visible points only for scaling and drawing
+    const visibleSmoothed = smoothed.filter(h => h.t >= minTime);
+    if (visibleSmoothed.length < 2) return;
+
+    const rawMin = Math.min(...visibleSmoothed.map(h => h.val));
+    const rawMax = Math.max(...visibleSmoothed.map(h => h.val));
     
     let range = rawMax - rawMin;
     if (range === 0) range = 1;
@@ -643,16 +649,16 @@
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
 
-    for (let i = 0; i < smoothed.length; i++) {
-      const x = getX(smoothed[i].t);
-      const y = getY(smoothed[i].val);
+    for (let i = 0; i < visibleSmoothed.length; i++) {
+      const x = getX(visibleSmoothed[i].t);
+      const y = getY(visibleSmoothed[i].val);
       if (i === 0) ctx.moveTo(x, y);
       else ctx.lineTo(x, y);
     }
     ctx.stroke();
     
-    ctx.lineTo(getX(smoothed[smoothed.length - 1].t), canvas.height);
-    ctx.lineTo(getX(smoothed[0].t), canvas.height);
+    ctx.lineTo(getX(visibleSmoothed[visibleSmoothed.length - 1].t), canvas.height);
+    ctx.lineTo(getX(visibleSmoothed[0].t), canvas.height);
     ctx.closePath();
     
     const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
@@ -665,7 +671,7 @@
     ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
     ctx.font = '9px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif';
     ctx.textAlign = 'left';
-    ctx.fillText("-1h", 2, canvas.height - 2);
+    ctx.fillText(`-${winDef.key}`, 2, canvas.height - 2);
     
     ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
     ctx.textAlign = 'right';
@@ -718,9 +724,10 @@
       lastGraphUpdate = now;
     }
     
+    const winDef = WINDOWS.find((w) => w.key === selectedWindow) || WINDOWS[2];
     try {
-      drawGraph('bxph-canvas-xp', xphHistory, 107, 255, 176); // #6bffb0
-      drawGraph('bxph-canvas-gold', goldhHistory, 255, 215, 106); // #ffd76a
+      drawGraph('bxph-canvas-xp', xphHistory, 107, 255, 176, winDef); 
+      drawGraph('bxph-canvas-gold', goldhHistory, 255, 215, 106, winDef); 
     } catch (e) {
       console.error('Error drawing canvas', e);
     }
@@ -774,8 +781,9 @@
     setInterval(tick, TICK_MS);
     const ro = new ResizeObserver(() => {
       try {
-        drawGraph('bxph-canvas-xp', xphHistory, 107, 255, 176);
-        drawGraph('bxph-canvas-gold', goldhHistory, 255, 215, 106);
+        const winDef = WINDOWS.find((w) => w.key === selectedWindow) || WINDOWS[2];
+        drawGraph('bxph-canvas-xp', xphHistory, 107, 255, 176, winDef);
+        drawGraph('bxph-canvas-gold', goldhHistory, 255, 215, 106, winDef);
       } catch(e) {}
     });
     if (overlayEl) ro.observe(overlayEl);
