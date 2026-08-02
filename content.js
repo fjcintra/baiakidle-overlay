@@ -633,12 +633,15 @@
     const rawMin = Math.min(...visibleSmoothed.map(h => h.val));
     const rawMax = Math.max(...visibleSmoothed.map(h => h.val));
     
-    let range = rawMax - rawMin;
+    // Fixar o piso matemático em 0 para não super-ampliar pequenas variações
+    const baseMin = rawMin > 0 ? 0 : rawMin;
+    
+    let range = rawMax - baseMin;
     if (range === 0) range = 1;
     
-    // Dynamic scale highlighting micro-variations
+    // Previne a sobreposição de texto
     let maxVal = rawMax + range * 0.35; // 35% top padding for max text
-    let minVal = rawMin - range * 0.35; // 35% bottom padding for min text
+    let minVal = baseMin - range * 0.25; // 25% bottom padding for min text
 
     const getX = (t) => ((t - minTime) / (maxTime - minTime)) * canvas.width;
     const getY = (v) => canvas.height - ((v - minVal) / (maxVal - minVal)) * canvas.height;

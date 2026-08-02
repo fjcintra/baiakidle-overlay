@@ -18,8 +18,9 @@
   overflow: hidden;
 }
 
-#bxph-overlay.bxph-collapsed .bxph-body {
-  display: none;
+#bxph-overlay.bxph-collapsed .bxph-canvas,
+#bxph-overlay.bxph-collapsed .bxph-windows {
+  display: none !important;
 }
 
 #bxph-header {
