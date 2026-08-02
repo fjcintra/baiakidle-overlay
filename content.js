@@ -307,6 +307,14 @@
     chrome.storage.local.set({ [key]: { top: el.style.top, left: el.style.left } });
   }
 
+  function syncLevelOverlay() {
+    if (!overlayEl || !levelOverlayEl) return;
+    const rect = overlayEl.getBoundingClientRect();
+    levelOverlayEl.style.top = (rect.bottom + 8) + 'px';
+    levelOverlayEl.style.left = rect.left + 'px';
+    levelOverlayEl.style.width = rect.width + 'px';
+  }
+
   function buildOverlay() {
     overlayEl = document.createElement('div');
     overlayEl.id = 'bxph-overlay';
@@ -371,6 +379,7 @@
       collapsed = !collapsed;
       overlayEl.classList.toggle('bxph-collapsed', collapsed);
       chrome.storage.local.set({ bxph_collapsed: collapsed });
+      setTimeout(syncLevelOverlay, 10); // sync after layout updates
     });
 
     makeDraggable(overlayEl, overlayEl.querySelector('#bxph-header'));
@@ -407,9 +416,6 @@
     let startMouseY = 0;
     let startLeftEl = 0;
     let startTopEl = 0;
-    let other = null;
-    let startLeftOther = 0;
-    let startTopOther = 0;
 
     handle.addEventListener('mousedown', (e) => {
       dragging = true;
@@ -418,13 +424,6 @@
       startMouseY = e.clientY;
       startLeftEl = rect.left;
       startTopEl = rect.top;
-
-      other = docked ? getOtherPanel(el) : null;
-      if (other) {
-        const orect = other.getBoundingClientRect();
-        startLeftOther = orect.left;
-        startTopOther = orect.top;
-      }
       e.preventDefault();
     });
 
@@ -436,20 +435,13 @@
       el.style.left = `${startLeftEl + dx}px`;
       el.style.top = `${startTopEl + dy}px`;
       el.style.right = 'auto';
-
-      if (other) {
-        other.style.left = `${startLeftOther + dx}px`;
-        other.style.top = `${startTopOther + dy}px`;
-        other.style.right = 'auto';
-      }
+      syncLevelOverlay();
     });
 
     document.addEventListener('mouseup', () => {
       if (!dragging) return;
       dragging = false;
       savePosition(el);
-      if (other) savePosition(other);
-      other = null;
     });
   }
 
@@ -458,37 +450,18 @@
     levelOverlayEl.id = 'bxph-level-overlay';
     levelOverlayEl.innerHTML = `
       <div id="bxph-level-header" class="bxph-level-header">
-        <span>Tempo p/ Up</span>
+        <span>Level up</span>
         <span class="bxph-header-icons">
-          <span class="bxph-dock-toggle" title="Colar painéis">🔗</span>
           <span class="bxph-toggle" title="Minimizar/expandir">▾</span>
         </span>
       </div>
       <div class="bxph-body">
-        <div class="bxph-config-row">
-          <span class="bxph-label">Principal</span>
-          <select id="bxph-main-select"></select>
-        </div>
         <div id="bxph-level-list"></div>
-        <div class="bxph-hint">Baseado no XP/h real (<span id="bxph-level-window-label"></span>)</div>
       </div>
     `;
-    // document.body.appendChild(levelOverlayEl);
+    document.body.appendChild(levelOverlayEl);
 
     levelListEl = levelOverlayEl.querySelector('#bxph-level-list');
-    const mainSelectEl = levelOverlayEl.querySelector('#bxph-main-select');
-
-    mainSelectEl.addEventListener('change', () => {
-      mainIndex = parseInt(mainSelectEl.value, 10) || 0;
-      chrome.storage.local.set({ bxph_main_index: mainIndex });
-      renderLevelOverlay();
-
-
-    });
-
-    levelOverlayEl.querySelector('.bxph-dock-toggle').addEventListener('click', () => {
-      setDocked(!docked);
-    });
 
     levelOverlayEl.querySelector('.bxph-toggle').addEventListener('click', () => {
       levelCollapsed = !levelCollapsed;
@@ -496,51 +469,27 @@
       chrome.storage.local.set({ bxph_level_collapsed: levelCollapsed });
     });
 
-    makeDraggable(levelOverlayEl, levelOverlayEl.querySelector('#bxph-level-header'));
-
     chrome.storage.local.get(
-      ['bxph_level_collapsed', 'bxph_level_pos', 'bxph_main_index'],
+      ['bxph_level_collapsed'],
       (res) => {
         if (res.bxph_level_collapsed) {
           levelCollapsed = true;
           levelOverlayEl.classList.add('bxph-collapsed');
         }
-        if (res.bxph_level_pos) {
-          levelOverlayEl.style.top = res.bxph_level_pos.top;
-          levelOverlayEl.style.left = res.bxph_level_pos.left;
-          levelOverlayEl.style.right = 'auto';
-        } else {
-          levelOverlayEl.style.top = '80px';
-          levelOverlayEl.style.right = '230px';
-        }
-        if (typeof res.bxph_main_index === 'number') mainIndex = res.bxph_main_index;
-      renderLevelOverlay();
-
-
+        renderLevelOverlay();
       }
     );
   }
 
   function renderLevelOverlay() {
     if (!levelOverlayEl) return;
-    const winDef = WINDOWS.find((w) => w.key === selectedWindow) || WINDOWS[2];
-    levelOverlayEl.querySelector('#bxph-level-window-label').textContent = winDef.label;
 
     const members = findPartyMembers();
-    const mainSelectEl = levelOverlayEl.querySelector('#bxph-main-select');
 
     if (members.length === 0) {
-      mainSelectEl.innerHTML = '';
       levelListEl.innerHTML = '<div class="bxph-hint">Nenhum personagem encontrado.</div>';
       return;
     }
-
-    if (mainIndex >= members.length) mainIndex = 0;
-
-    // Repopula o select mantendo a seleção atual
-    mainSelectEl.innerHTML = members
-      .map((m, i) => `<option value="${i}" ${i === mainIndex ? 'selected' : ''}>${m.label}</option>`)
-      .join('');
 
     const nonMainCount = Math.max(members.length - 1, 1);
     const mainShare = mainPercent / 100;
@@ -548,36 +497,33 @@
 
     levelListEl.innerHTML = members
       .map((m, i) => {
-        const share = i === mainIndex ? mainShare : otherShare;
+        const share = i === 0 ? mainShare : otherShare;
         const effectiveXph = lastRealXph * share;
 
-        const missingStr = m.missingXp !== null ? formatNumber(m.missingXp) : '–';
         let etaStr = '–';
         if (m.missingXp !== null && effectiveXph > 0) {
           etaStr = formatDuration(m.missingXp / effectiveXph);
         }
-        const percentStr = m.percent !== null ? `${m.percent}%` : '';
-        const roleTag = i === mainIndex ? ' (Principal)' : '';
+        const percentStr = m.percent !== null ? `${m.percent}%` : '0%';
+        
+        // Limpar "lvl" ou "Lvl" do nome
+        const cleanName = m.label.replace(/lvl\s*/i, '').trim();
+        
+        const rowClass = i === 0 ? 'bxph-level-row-compact bxph-level-main' : 'bxph-level-row-compact';
+        
         return `
-          <div class="bxph-level-row">
-            <div class="bxph-level-name">${m.label}${roleTag} ${percentStr ? `· ${percentStr}` : ''}</div>
-            <div class="bxph-row">
-              <span class="bxph-label">Falta</span>
-              <span class="bxph-value">${missingStr}</span>
+          <div class="${rowClass}">
+            <div class="bxph-level-text-row">
+              <span class="bxph-level-name">${cleanName}</span>
+              <span class="bxph-level-eta">${etaStr}</span>
             </div>
-            <div class="bxph-row">
-              <span class="bxph-label">Tempo p/ Up</span>
-              <span class="bxph-value">${etaStr}</span>
+            <div class="bxph-level-progress-bg">
+              <div class="bxph-level-progress-fill" style="width: ${percentStr}"></div>
             </div>
           </div>
         `;
       })
       .join('');
-
-    if (members.every((m) => m.missingXp === null)) {
-      levelListEl.innerHTML +=
-        '<div class="bxph-hint">⚠ Achei os nomes, mas não a barra de XP correspondente.</div>';
-    }
   }
 
   function findGameXphValue() {
@@ -603,9 +549,9 @@
     const canvas = document.getElementById(canvasId);
     if (!canvas) return;
     
-    const rect = canvas.getBoundingClientRect();
-    if (rect.width === 0) return; // not visible
-    canvas.width = rect.width;
+    const parentWidth = canvas.parentElement.clientWidth;
+    if (parentWidth === 0) return; // not visible
+    canvas.width = parentWidth;
     canvas.height = 85; // fixed
 
     const ctx = canvas.getContext('2d');
@@ -777,12 +723,14 @@
   function init() {
     buildOverlay();
     buildLevelOverlay();
+    syncLevelOverlay();
     chrome.storage.local.get(['bxph_docked'], (res) => {
       docked = !!res.bxph_docked;
       updateDockUI();
     });
     setInterval(tick, TICK_MS);
     const ro = new ResizeObserver(() => {
+      syncLevelOverlay();
       try {
         const winDef = WINDOWS.find((w) => w.key === selectedWindow) || WINDOWS[2];
         drawGraph('bxph-canvas-xp', xphHistory, 107, 255, 176, winDef);

@@ -144,6 +144,7 @@
 
 #bxph-level-overlay {
   position: fixed;
+  box-sizing: border-box;
   top: 80px;
   right: 230px;
   z-index: 999999;
@@ -154,8 +155,6 @@
   border: 1px solid #444;
   border-radius: 8px;
   padding: 10px 12px;
-  min-width: 200px;
-  max-width: 260px;
   box-shadow: 0 4px 14px rgba(0,0,0,0.4);
   user-select: none;
 }
@@ -174,62 +173,48 @@
   color: #7ac8ff;
 }
 
-.bxph-config-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 3px 0;
-}
-
-.bxph-config-row select,
-.bxph-config-row input {
-  background: #2a2a30;
-  border: 1px solid #444;
-  color: #f0f0f0;
-  border-radius: 5px;
-  padding: 2px 4px;
-  font-size: 11px;
-  max-width: 110px;
-}
-
-.bxph-config-row input {
-  width: 46px;
-  max-width: 46px;
-  text-align: right;
-}
-
-.bxph-level-row {
-  border-top: 1px solid #333;
+/* Level Up Compact UI */
+.bxph-level-row-compact {
   padding: 6px 0;
+  border-top: 1px solid #333;
 }
-
-.bxph-level-row:first-child {
+.bxph-level-row-compact:first-child {
   border-top: none;
-  padding-top: 0;
+  padding-top: 2px;
 }
-
+.bxph-level-text-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
 .bxph-level-name {
   font-weight: 600;
   color: #e0e0e0;
-  margin-bottom: 2px;
-}
-
-.bxph-hint {
-  margin-top: 6px;
-  font-size: 10.5px;
-  color: #888;
-}
-
-#bxph-status {
-  margin-top: 6px;
   font-size: 11px;
-  color: #e08a8a;
+}
+.bxph-level-eta {
+  color: #6bffb0;
+  font-size: 11px;
+  font-weight: 700;
+}
+.bxph-level-progress-bg {
+  background: #111;
+  border-radius: 3px;
+  height: 4px;
+  width: 100%;
+  overflow: hidden;
+}
+.bxph-level-progress-fill {
+  background: #7ac8ff;
+  height: 100%;
+  border-radius: 3px;
 }
 
-.bxph-canvas {
-  width: 100%;
-  height: 85px;
-  display: block;
-  margin-bottom: 8px;
+/* Highlight Main Character (Gold) */
+.bxph-level-main .bxph-level-name,
+.bxph-level-main .bxph-level-eta {
+  color: #ffd76a;
+}
+.bxph-level-main .bxph-level-progress-fill {
+  background: #ffd76a;
 }
